@@ -54,6 +54,8 @@ gate on the minimum supported Bun (1.2.0) and the latest.
   adapter's `[adapter] connected to daemon` stderr line, `waitForSource`, `/health`, log
   cursors, pid changes, a nonce-bearing event. A "nothing arrives" window starts only
   after a positive barrier, with a comment justifying its length.
+- A fake socket server in a test reads (or `resume()`s) every connection: on Linux an
+  unread, paused socket never sees its peer close, so `server.close()` hangs.
 - Public surface is imported by package name (`auto-channels/...`); internals by
   relative path. Directory watching goes through `shared/dirWatch.ts`, never raw
   `fs.watch` filenames.

@@ -56,7 +56,11 @@ const line = (frame: unknown) => `${JSON.stringify(frame)}\n`
 
 /** A fake daemon on the adapter's socket path; `onConnection` writes its literal NDJSON. */
 async function fakeDaemon(onConnection: (socket: Socket) => void): Promise<Server> {
-  const server = createServer(onConnection)
+  const server = createServer(socket => {
+    // Discard what the adapter sends: on Linux an unread, paused socket never sees the peer close, and server.close() hangs.
+    socket.resume()
+    onConnection(socket)
+  })
   await new Promise<void>(resolve => server.listen(socketPath(), resolve))
   cleanups.push(() => new Promise(resolve => server.close(resolve)))
   return server

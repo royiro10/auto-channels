@@ -3,25 +3,39 @@
  * edited again while its slow async start() is in flight ends with exactly
  * one running instance, the latest, and a deletion mid-load leaves none.
  */
+
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { type ProjectSession, projectFixture, type ReceivedEvent, seed, waitFor } from './helpers.ts'
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { type ProjectSession, projectFixture, type ReceivedEvent, seed, waitFor, waitForSource } from './helpers.ts'
 
 const project = projectFixture({
   sources: { 'webhook.ts': seed('webhook'), 'cron.ts': seed('cron'), 'filedrop.ts': seed('filedrop') },
 })
 const TEMP_SOURCE = 'e2e_21_temp.ts'
+const PROBE_SOURCE = 'e2e_21_probe.ts'
+// Under the fixture root, which exists only once beforeAll has run.
+const started = () => join(project.root, 'e2e-21-started')
+const gate = () => join(project.root, 'e2e-21-gate')
 
 let session: ProjectSession
 let received: ReceivedEvent[]
 
-function slowStartFixture(tickContent: string): string {
+/*
+ * A source whose start() marks that it is running, then blocks until the test
+ * opens the gate: the race "edited or deleted while start() is in flight" is
+ * set up by signals, never by betting that a reload lands inside a delay.
+ */
+function gatedFixture(tickContent: string): string {
   return `
+import { existsSync, writeFileSync } from 'node:fs'
 import type { Source } from 'auto-channels/shared/source.ts'
 const slow: Source = {
   name: '${tickContent}',
   description: 'e2e fixture',
   async start(ctx) {
-    await new Promise(resolve => setTimeout(resolve, 500))
+    writeFileSync(${JSON.stringify(started())}, '')
+    while (!existsSync(${JSON.stringify(gate())})) await new Promise(resolve => setTimeout(resolve, 20))
     const id = setInterval(() => ctx.emit({ content: '${tickContent}' }), 150)
     return () => clearInterval(id)
   },
@@ -29,6 +43,31 @@ const slow: Source = {
 export default slow
 `
 }
+
+function tickingFixture(tickContent: string): string {
+  return `
+import type { Source } from 'auto-channels/shared/source.ts'
+const ticking: Source = {
+  name: '${tickContent}',
+  description: 'e2e fixture',
+  start(ctx) {
+    const id = setInterval(() => ctx.emit({ content: '${tickContent}' }), 150)
+    return () => clearInterval(id)
+  },
+}
+export default ticking
+`
+}
+
+/** Write a gated source and resolve once its start() is running. */
+async function writeGatedAndWaitForStart(tickContent: string): Promise<void> {
+  rmSync(started(), { force: true })
+  rmSync(gate(), { force: true })
+  project.writeSource(TEMP_SOURCE, gatedFixture(tickContent))
+  await waitFor(() => existsSync(started()), 10_000, `${tickContent}'s start() to begin`)
+}
+
+const count = (content: string) => received.filter(event => event.content === content).length
 
 beforeAll(async () => {
   session = project.session()
@@ -39,62 +78,57 @@ beforeAll(async () => {
 
 describe('editing a source again while its slow start() is still in flight does not orphan an instance', () => {
   test('only the newer version keeps ticking; the superseded one stops for good', async () => {
-    project.writeSource(TEMP_SOURCE, slowStartFixture('e2e-21-v1-tick'))
-    // Edit again well before the 500ms start() delay elapses -- this is the race.
-    await new Promise(resolve => setTimeout(resolve, 150))
-    project.writeSource(TEMP_SOURCE, slowStartFixture('e2e-21-v2-tick'))
-
     try {
-      // v2 should eventually start ticking.
-      await waitFor(() => received.some(event => event.content === 'e2e-21-v2-tick'), 5000, 'v2 to start ticking')
+      await writeGatedAndWaitForStart('e2e-21-v1-tick')
+      project.writeSource(TEMP_SOURCE, tickingFixture('e2e-21-v2-tick'))
+      // v2 registered: its load replaced v1's slot while v1's start() was still blocked.
+      await waitForSource(session.client, 'e2e-21-v2-tick', true)
+      writeFileSync(gate(), '')
+      await waitFor(() => count('e2e-21-v2-tick') > 0, 5000, 'v2 to start ticking')
 
       /*
-       * Give v1 every chance to have also started ticking if the bug were
-       * present (its own 500ms delay plus a couple of 150ms tick intervals).
+       * v1's start() now resolves into a superseded slot. An orphan would poll
+       * the gate within 20ms and tick every 150ms: 1s would show several ticks.
        */
       await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const v1Ticks = received.filter(event => event.content === 'e2e-21-v1-tick').length
-      const v2TicksSoFar = received.filter(event => event.content === 'e2e-21-v2-tick').length
-      expect(v1Ticks).toBe(0)
-      expect(v2TicksSoFar).toBeGreaterThan(0)
+      expect(count('e2e-21-v1-tick')).toBe(0)
 
       /*
-       * And v2 must still be a *single* live instance, not two overlapping
-       * ones of its own from some other interleaving -- ticks keep flowing at
-       * roughly one interval's pace, not two instances' worth.
+       * And v2 must still be a *single* live instance: 3000ms / 150ms ≈ 20 ticks
+       * from one instance, ≈ 40 from two. The window is long on purpose: a short
+       * one can't tell a second instance from one delivery stall followed by a
+       * catch-up burst on a loaded machine.
        */
-      const countAtCheckpoint = v2TicksSoFar
+      const countAtCheckpoint = count('e2e-21-v2-tick')
       await new Promise(resolve => setTimeout(resolve, 3000))
-      const countAfterWindow = received.filter(event => event.content === 'e2e-21-v2-tick').length
-      /*
-       * 3000ms / 150ms ≈ 20 ticks from a single instance; a duplicate would
-       * show ≈ 40. The window is long on purpose: a short one (it was 500ms,
-       * bound 5) can't tell a second instance from one delivery stall
-       * followed by a catch-up burst on a loaded machine.
-       */
-      expect(countAfterWindow - countAtCheckpoint).toBeLessThanOrEqual(30)
+      expect(count('e2e-21-v2-tick') - countAtCheckpoint).toBeLessThanOrEqual(30)
     } finally {
+      writeFileSync(gate(), '')
       project.removeSource(TEMP_SOURCE)
     }
-  }, 15_000)
+  }, 20_000)
 
   test('deleting the file while start() is still in flight also stops the instance for good, not just edits', async () => {
-    project.writeSource(TEMP_SOURCE, slowStartFixture('e2e-21-deleted-tick'))
-    /*
-     * Delete it well before the 500ms start() delay elapses -- same race,
-     * different trigger: the generation bump has to happen regardless of
-     * whether the reload that caused it was an edit or a removal.
-     */
-    await new Promise(resolve => setTimeout(resolve, 150))
-    project.removeSource(TEMP_SOURCE)
+    try {
+      await writeGatedAndWaitForStart('e2e-21-deleted-tick')
+      project.removeSource(TEMP_SOURCE)
+      /*
+       * No log or registry change marks a never-registered file's removal. A probe
+       * written after it does: the watcher reports the deletion no later than the
+       * probe, and the deletion's retire is synchronous while the probe still has
+       * to import and start before it is listed.
+       */
+      project.writeSource(PROBE_SOURCE, tickingFixture('e2e-21-probe-tick'))
+      await waitForSource(session.client, 'e2e-21-probe-tick', true)
+      writeFileSync(gate(), '')
+      await waitFor(() => count('e2e-21-probe-tick') > 0, 5000, 'the probe to tick')
 
-    /*
-     * Give the slow start() every chance to finish and start ticking into a
-     * file that no longer exists.
-     */
-    await new Promise(resolve => setTimeout(resolve, 2000))
-
-    expect(received.some(event => event.content === 'e2e-21-deleted-tick')).toBe(false)
-  }, 15_000)
+      // As above: an orphan would tick several times in this window.
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      expect(count('e2e-21-deleted-tick')).toBe(0)
+    } finally {
+      writeFileSync(gate(), '')
+      project.removeSource(PROBE_SOURCE)
+    }
+  }, 20_000)
 })
