@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+.channels/
+
+# Local agent and editor setup (skills, pi agents, settings) — not part of the package
+.agents/
+.claude/
+.pi/
+skills-lock.json
+.vscode/

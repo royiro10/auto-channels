@@ -1,0 +1,62 @@
+{
+  "name": "auto-channels",
+  "version": "0.1.0",
+  "description": "Let an agent session (Claude Code or pi) react to the outside world — without a human re-prompting it.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/royiro10/auto-channels.git"
+  },
+  "homepage": "https://github.com/royiro10/auto-channels#readme",
+  "bugs": {
+    "url": "https://github.com/royiro10/auto-channels/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "pi",
+    "pi-coding-agent",
+    "mcp",
+    "channels",
+    "webhooks",
+    "events",
+    "pubsub",
+    "agent",
+    "model-context-protocol",
+    "bun"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "bin": {
+    "auto-channels": "./src/cli.ts"
+  },
+  "exports": {
+    "./builtins": "./src/builtins/index.ts",
+    "./shared/source.ts": "./src/shared/source.ts",
+    "./shared/testing.ts": "./src/shared/testing.ts",
+    "./shared/log.ts": "./src/shared/log.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2"
+  }
+}
