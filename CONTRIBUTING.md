@@ -7,6 +7,10 @@ bun install
 bun run typecheck && bun run lint && bun test     # must pass for every commit
 ```
 
+To try your checkout in a real project, run `bun link` here once, then
+`auto-channels init` in the project: run from a git checkout, `init` makes the project
+depend on that checkout (`file:`), so your edits are live.
+
 The suite spawns real daemons and adapters and takes a few minutes. CI runs the same
 gate on the minimum supported Bun (1.2.0) and the latest.
 

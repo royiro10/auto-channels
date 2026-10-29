@@ -24,6 +24,9 @@ const ADAPTER_ENTRY = {
   env: { AUTO_CHANNELS_ROOT: './.channels' },
 }
 
+/** What a consumer depends on when `init` doesn't run from a source checkout. */
+const GITHUB_DEPENDENCY = 'github:royiro10/auto-channels'
+
 const GITIGNORE_LINES = ['node_modules/', 'run/', 'dropbox/']
 
 /*
@@ -150,31 +153,32 @@ export function scaffold(targetDir: string, hosts: readonly Host[] = DEFAULT_HOS
   }
 
   /*
-   * Until the package is on a registry, the dependency is a file: path to the realpath of the
-   * package running this scaffold (a bun-linked install is a symlink). Machine-specific by
-   * design.
+   * Run from a git checkout (bun link, `bun src/cli.ts`), the consumer depends on that checkout,
+   * so local edits are live. Run any other way (bunx from GitHub), the package sits in a temporary
+   * download, so the consumer depends on the repo; its lockfile pins the commit.
    */
-  // This file lives in src/; the package root (where package.json is) is one up.
+  // This file lives in src/; the package root (where package.json is) is one up. A bun-linked install is a symlink.
   const packageDir = realpathSync(join(import.meta.dir, '..'))
+  const dependency = existsSync(join(packageDir, '.git')) ? `file:${packageDir}` : GITHUB_DEPENDENCY
   // The scaffolded tsconfig names `types: ["bun"]`, and a tarball or registry install brings no Bun types.
   const bunTypes = packageJson.devDependencies['@types/bun']
   upsertJson(
     join(CHANNELS_DIR, 'package.json'),
-    `"auto-channels": "file:${packageDir}" under "dependencies" and "@types/bun": "${bunTypes}" under "devDependencies"`,
+    `"auto-channels": "${dependency}" under "dependencies" and "@types/bun": "${bunTypes}" under "devDependencies"`,
     ['dependencies', 'devDependencies'],
     () => ({
       name: 'channels',
       private: true,
       description:
         "This project's auto-channels setup: event sources and the tool's own dependencies — see sources/_starter.ts to add a source.",
-      dependencies: { 'auto-channels': `file:${packageDir}` },
+      dependencies: { 'auto-channels': dependency },
       devDependencies: { '@types/bun': bunTypes },
     }),
     existing => {
       const dependencies = (existing.dependencies ?? {}) as Record<string, unknown>
       const devDependencies = (existing.devDependencies ?? {}) as Record<string, unknown>
       if ('auto-channels' in dependencies && '@types/bun' in devDependencies) return false
-      dependencies['auto-channels'] ??= `file:${packageDir}`
+      dependencies['auto-channels'] ??= dependency
       devDependencies['@types/bun'] ??= bunTypes
       existing.dependencies = dependencies
       existing.devDependencies = devDependencies

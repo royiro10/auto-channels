@@ -27,24 +27,21 @@ no registration, no redeploy.
 
 ## Quickstart
 
+In your project:
+
 ```bash
-bunx auto-channels init      # once published; from this checkout, see below
+bunx github:royiro10/auto-channels init        # --pi for pi, --claude --pi for both
 claude --dangerously-load-development-channels server:auto-channels
 ```
 
 `init` creates one adapter registration per host you select — `.mcp.json` at your
 project root for Claude Code (the default), `.pi/channels.json` for pi — and one
 self-contained `.channels/` directory owning everything else, its own `node_modules`
-included, so a non-JS repo gains no root-level JS toolchain files. It's also safe in a project that's already set up: existing JSON
-configs gain only the missing entries (your other MCP servers survive untouched), and
-nothing is ever overwritten.
-
-From this unpublished checkout, replace the first line with:
-
-```bash
-cd <checkout> && bun link                # once: puts `auto-channels` on your PATH
-cd <your-project> && auto-channels init
-```
+included, so a non-JS repo gains no root-level JS toolchain files. `.channels/` depends
+on this GitHub repo and its lockfile pins the commit; `cd .channels && bun update
+auto-channels` upgrades. It's also safe in a project that's already set up: existing
+JSON configs gain only the missing entries (your other MCP servers survive untouched),
+and nothing is ever overwritten.
 
 Nothing runs until you opt in. Enable your first source with a one-line file:
 

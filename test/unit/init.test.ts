@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import packageJson from '../../package.json' with { type: 'json' }
@@ -74,9 +74,8 @@ describe('scaffold', () => {
 
     /*
      * The generated package.json makes .channels/ self-contained: its own
-     * dependency on auto-channels (a file: path to the running package,
-     * pre-publish -- see init.ts), so the HOST project never needs root-level
-     * JS toolchain files.
+     * dependency on auto-channels (run from this checkout: a file: path to it),
+     * so the HOST project never needs root-level JS toolchain files.
      */
     const channelsPackage = JSON.parse(readFileSync(join(target, '.channels', 'package.json'), 'utf8'))
     expect(channelsPackage.private).toBe(true)
@@ -103,6 +102,22 @@ describe('scaffold', () => {
     expect(starter).toContain('export default')
     expect(starter).toContain("from 'auto-channels/builtins'")
     for (const builtin of ['webhook({', 'cron(', 'filedrop()']) expect(starter).toContain(builtin)
+  })
+
+  test('run from a copy that is not a git checkout (bunx from GitHub), the dependency is the GitHub repo', async () => {
+    // bunx runs the package from a temporary download; a file: path to it breaks once that is cleaned up.
+    const copy = mkdtempSync(join(tmpdir(), 'auto-channels-copy-'))
+    try {
+      cpSync(join(REPO_ROOT, 'src'), join(copy, 'src'), { recursive: true })
+      cpSync(join(REPO_ROOT, 'package.json'), join(copy, 'package.json'))
+      const copied: typeof import('../../src/init.ts') = await import(join(copy, 'src', 'init.ts'))
+      const target = freshDir()
+      copied.scaffold(target)
+      const channelsPackage = JSON.parse(readFileSync(join(target, '.channels', 'package.json'), 'utf8'))
+      expect(channelsPackage.dependencies['auto-channels']).toBe('github:royiro10/auto-channels')
+    } finally {
+      rmSync(copy, { recursive: true, force: true })
+    }
   })
 
   test("the starter's guidance is accurate for both hosts", () => {

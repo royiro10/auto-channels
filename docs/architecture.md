@@ -137,7 +137,7 @@ reconnect.
 - **[CONTRIBUTING.md](../CONTRIBUTING.md)** and **[AGENTS.md](../AGENTS.md)** — how to
   change this code. This repo deliberately doesn't register the channel for its own
   sessions: to drive it from a real session, scaffold a scratch consumer anywhere
-  (`auto-channels init` after `bun link`, per the [Quickstart](../README.md#quickstart)).
+  (`auto-channels init` after `bun link`, see [CONTRIBUTING.md](../CONTRIBUTING.md)).
 - **[How Claude Code channels behave](claude-code-channels.md)** — the platform facts
   this design rests on.
 - **[test/e2e/README.md](../test/e2e/README.md)** — the e2e fixture's entry points.
