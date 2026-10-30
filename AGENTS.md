@@ -21,6 +21,9 @@ and test conventions. Additionally, for agents:
 - Never modify anything outside this project without explicit manual approval for that
   specific change. Only the scratchpad directory and `/tmp` are exceptions; an approval
   never carries over to another path.
+- Only a human bumps a major or minor version. An agent may release a patch
+  (`x.y.z` → `x.y.(z+1)`) by following CONTRIBUTING.md's release steps, and nothing larger:
+  if a change needs a minor or major release, say so and stop.
 
 ## Commands
 
