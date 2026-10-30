@@ -120,6 +120,24 @@ describe('scaffold', () => {
     }
   })
 
+  test('ref pins the GitHub repo at a tag, branch or commit — even when run from a checkout', () => {
+    const target = freshDir()
+    scaffold(target, ['claude'], { ref: 'v0.1.0' })
+    const channelsPackage = JSON.parse(readFileSync(join(target, '.channels', 'package.json'), 'utf8'))
+    expect(channelsPackage.dependencies['auto-channels']).toBe('github:royiro10/auto-channels#v0.1.0')
+  })
+
+  test('ref never rewrites an existing auto-channels dependency; the warning says how to change it', () => {
+    const target = freshDir()
+    mkdirSync(join(target, '.channels'))
+    const existing = { dependencies: { 'auto-channels': 'github:royiro10/auto-channels' }, devDependencies: {} }
+    writeFileSync(join(target, '.channels', 'package.json'), JSON.stringify(existing))
+    const { warnings } = scaffold(target, ['claude'], { ref: 'v0.1.0' })
+    const channelsPackage = JSON.parse(readFileSync(join(target, '.channels', 'package.json'), 'utf8'))
+    expect(channelsPackage.dependencies['auto-channels']).toBe('github:royiro10/auto-channels')
+    expect(warnings.join('\n')).toContain('bun add github:royiro10/auto-channels#v0.1.0')
+  })
+
   test("the starter's guidance is accurate for both hosts", () => {
     const target = freshDir()
     scaffold(target)
@@ -320,6 +338,13 @@ describe('cli', () => {
     const help = Bun.spawnSync([process.execPath, CLI, '--help'])
     expect(help.exitCode).toBe(0)
     for (const text of ['init', '--claude', '--pi']) expect(help.stdout.toString()).toContain(text)
+  })
+
+  test('--ref without a value exits 1 before scaffolding anything', () => {
+    const target = freshDir()
+    const run = Bun.spawnSync([process.execPath, CLI, 'init', '--ref'], { cwd: target })
+    expect(run.exitCode).toBe(1)
+    expect(readdirSync(target)).toEqual([])
   })
 
   test('an unknown init flag exits 1 before scaffolding anything', () => {

@@ -75,9 +75,8 @@ describe('daemon.status.json — the external liveness/health surface', () => {
 
   test('reports connectedClients >= 1 while this session holds a live socket', async () => {
     // The signal a watchdog polls for: a healthy daemon with connectedClients
-    // at 0 would mean every event is firing into a void (the silent outage a
-    // real deployment hit). We have one connected session,
-    // so it must be at least 1.
+    // at 0 would mean every event is firing into a void. We have one connected
+    // session, so it must be at least 1.
     await waitFor(() => readStatus().connectedClients >= 1, 10_000, 'connectedClients to reflect this session')
   })
 

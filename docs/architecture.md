@@ -56,7 +56,7 @@ Log from sources with `createLogger('name')` (or `console.log`): both land in
 
 If a source is healthy (`daemon.log` shows `event from <source>: ...`) but a
 session stopped seeing `<channel>` tags, suspect the session→daemon link, not
-the source — hard-won lessons from a real deployment:
+the source:
 
 - **`autochannels_list_sources` showing `subscribed: true` is NOT proof of delivery** —
   it's computed adapter-side from the session's intent and says nothing about

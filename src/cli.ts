@@ -6,11 +6,13 @@ import { CHANNELS_DIR, DEFAULT_HOSTS, HOSTS, type Host, SERVER_NAME, scaffold } 
 const USAGE = `auto-channels v${packageJson.version}
 
 Usage:
-  auto-channels init [--claude] [--pi]
+  auto-channels init [--claude] [--pi] [--ref <tag|branch|commit>]
       Scaffold this directory as an auto-channels project, then run bun install
       inside .channels/. Host flags (combinable; default --claude):
         --claude   .mcp.json           (Claude Code)
         --pi       .pi/channels.json   (pi, via the channels.tools extension)
+      --ref pins the GitHub repo (e.g. --ref v0.1.0); without it, the project
+      follows the latest and its lockfile pins the commit until bun update.
       Safe to re-run: existing files are merged or skipped, never overwritten.
 `
 
@@ -20,26 +22,37 @@ const NEXT_STEPS: Record<Host, string> = {
   pi: 'pi (needs the channels.tools extension once per machine):\n  pi install npm:channels.tools\n  pi',
 }
 
+function usageError(message: string): never {
+  console.error(`${message}\n`)
+  console.log(USAGE)
+  process.exit(1)
+}
+
 /** Parse `init`'s flags; an unknown flag is an error, never silently ignored. */
-function parseHosts(flags: string[]): readonly Host[] {
+function parseInitFlags(flags: string[]): { hosts: readonly Host[]; ref: string | undefined } {
   const hosts: Host[] = []
-  for (const flag of flags) {
-    const host = HOSTS.find(candidate => flag === `--${candidate}`)
-    if (host === undefined) {
-      console.error(`init flag must be one of ${HOSTS.map(h => `--${h}`).join(', ')}, got "${flag}"\n`)
-      console.log(USAGE)
-      process.exit(1)
+  let ref: string | undefined
+  for (let i = 0; i < flags.length; i++) {
+    const flag = flags[i]
+    if (flag === '--ref') {
+      ref = flags[++i]
+      if (ref === undefined || ref === '' || ref.startsWith('--'))
+        usageError('init --ref must name a tag, branch or commit')
+      continue
     }
+    const host = HOSTS.find(candidate => flag === `--${candidate}`)
+    if (host === undefined)
+      usageError(`init flag must be one of ${[...HOSTS.map(h => `--${h}`), '--ref'].join(', ')}, got "${flag}"`)
     if (!hosts.includes(host)) hosts.push(host)
   }
-  return hosts.length > 0 ? hosts : DEFAULT_HOSTS
+  return { hosts: hosts.length > 0 ? hosts : DEFAULT_HOSTS, ref }
 }
 
 const [command, ...flags] = process.argv.slice(2)
 
 if (command === 'init') {
-  const hosts = parseHosts(flags)
-  const { created, skipped, merged, warnings } = scaffold(process.cwd(), hosts)
+  const { hosts, ref } = parseInitFlags(flags)
+  const { created, skipped, merged, warnings } = scaffold(process.cwd(), hosts, { ref })
   for (const file of created) console.log(`created  ${file}`)
   for (const file of merged)
     console.log(`merged   ${file} (added the auto-channels entries; everything else preserved)`)

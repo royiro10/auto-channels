@@ -24,8 +24,13 @@ const ADAPTER_ENTRY = {
   env: { AUTO_CHANNELS_ROOT: './.channels' },
 }
 
-/** What a consumer depends on when `init` doesn't run from a source checkout. */
-const GITHUB_DEPENDENCY = 'github:royiro10/auto-channels'
+/** The GitHub repo from package.json's `repository`: a fork that updates that field installs from itself. */
+const GITHUB_REPO = packageJson.repository.url.replace(/^git\+https:\/\/github\.com\/|\.git$/g, '')
+
+export interface ScaffoldOptions {
+  /** Pin the dependency to this tag, branch or commit of the GitHub repo. Default: follow the latest. */
+  ref?: string | undefined
+}
 
 const GITIGNORE_LINES = ['node_modules/', 'run/', 'dropbox/']
 
@@ -58,7 +63,11 @@ export interface ScaffoldResult {
  * entry container are reported in `warnings`, never touched. A merged JSON file is
  * rewritten with 2-space indentation (key order kept). Does not run `bun install`.
  */
-export function scaffold(targetDir: string, hosts: readonly Host[] = DEFAULT_HOSTS): ScaffoldResult {
+export function scaffold(
+  targetDir: string,
+  hosts: readonly Host[] = DEFAULT_HOSTS,
+  { ref }: ScaffoldOptions = {},
+): ScaffoldResult {
   const created: string[] = []
   const skipped: string[] = []
   const merged: string[] = []
@@ -153,13 +162,16 @@ export function scaffold(targetDir: string, hosts: readonly Host[] = DEFAULT_HOS
   }
 
   /*
-   * Run from a git checkout (bun link, `bun src/cli.ts`), the consumer depends on that checkout,
-   * so local edits are live. Run any other way (bunx from GitHub), the package sits in a temporary
-   * download, so the consumer depends on the repo; its lockfile pins the commit.
+   * A ref pins the GitHub repo. Otherwise, run from a git checkout (bun link, `bun src/cli.ts`), the
+   * consumer depends on that checkout, so local edits are live; run any other way (bunx from GitHub),
+   * the package sits in a temporary download, so the consumer follows the repo's latest and its
+   * lockfile pins the commit until `bun update`.
    */
   // This file lives in src/; the package root (where package.json is) is one up. A bun-linked install is a symlink.
   const packageDir = realpathSync(join(import.meta.dir, '..'))
-  const dependency = existsSync(join(packageDir, '.git')) ? `file:${packageDir}` : GITHUB_DEPENDENCY
+  const github = `github:${GITHUB_REPO}`
+  const dependency =
+    ref !== undefined ? `${github}#${ref}` : existsSync(join(packageDir, '.git')) ? `file:${packageDir}` : github
   // The scaffolded tsconfig names `types: ["bun"]`, and a tarball or registry install brings no Bun types.
   const bunTypes = packageJson.devDependencies['@types/bun']
   upsertJson(
@@ -177,7 +189,14 @@ export function scaffold(targetDir: string, hosts: readonly Host[] = DEFAULT_HOS
     existing => {
       const dependencies = (existing.dependencies ?? {}) as Record<string, unknown>
       const devDependencies = (existing.devDependencies ?? {}) as Record<string, unknown>
-      if ('auto-channels' in dependencies && '@types/bun' in devDependencies) return false
+      const current = dependencies['auto-channels']
+      if (ref !== undefined && current !== undefined && current !== dependency) {
+        warnings.push(
+          `.channels/package.json already depends on auto-channels (${String(current)}) -- left as is; ` +
+            `to pin it: cd ${CHANNELS_DIR} && bun add ${dependency}`,
+        )
+      }
+      if (current !== undefined && '@types/bun' in devDependencies) return false
       dependencies['auto-channels'] ??= dependency
       devDependencies['@types/bun'] ??= bunTypes
       existing.dependencies = dependencies

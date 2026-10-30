@@ -74,3 +74,17 @@ gate on the minimum supported Bun (1.2.0) and the latest.
   signals FSEvents' stream start — `startWatching`'s 150 ms beat after `startForTest`,
   and the two cases that stop 200 ms after a write. Add a source-side signal only if they
   flake.
+
+## Releasing
+
+Versions follow [SemVer](https://semver.org); before 1.0 a minor version may break.
+
+1. Move the `[Unreleased]` entries in [CHANGELOG.md](CHANGELOG.md) under a new
+   `## [x.y.z] - <date>` heading and update the links at its bottom.
+2. Set `version` in `package.json` to `x.y.z`, and the pinned example in the README's
+   quickstart to `vx.y.z`.
+3. Commit, then `git tag vx.y.z && git push origin main vx.y.z`.
+
+The [release workflow](.github/workflows/release.yml) checks that the tag matches
+`package.json`, runs the gate, and publishes the GitHub release with that version's
+CHANGELOG section as its notes. Never move a published tag: pinned consumers resolve it.

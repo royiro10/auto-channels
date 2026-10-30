@@ -19,7 +19,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         bun: ['1.2.0', latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ matrix.bun }}

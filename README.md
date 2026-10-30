@@ -2,6 +2,7 @@
 
 **Let an agent session (Claude Code or pi) react to the outside world — without a human re-prompting it.**
 
+[![CI](https://github.com/royiro10/auto-channels/actions/workflows/ci.yml/badge.svg)](https://github.com/royiro10/auto-channels/actions/workflows/ci.yml)
 ![license: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![status: pre-1.0](https://img.shields.io/badge/status-pre--1.0-orange)
 ![bun: ≥1.2](https://img.shields.io/badge/bun-%E2%89%A51.2-black)
@@ -34,12 +35,18 @@ bunx github:royiro10/auto-channels init        # --pi for pi, --claude --pi for 
 claude --dangerously-load-development-channels server:auto-channels
 ```
 
+To pin a [release](https://github.com/royiro10/auto-channels/releases) instead of
+following the latest: `bunx github:royiro10/auto-channels#v0.1.0 init --ref v0.1.0`.
+
 `init` creates one adapter registration per host you select — `.mcp.json` at your
 project root for Claude Code (the default), `.pi/channels.json` for pi — and one
 self-contained `.channels/` directory owning everything else, its own `node_modules`
 included, so a non-JS repo gains no root-level JS toolchain files. `.channels/` depends
-on this GitHub repo and its lockfile pins the commit; `cd .channels && bun update
-auto-channels` upgrades. It's also safe in a project that's already set up: existing
+on this GitHub repo and its lockfile pins the commit. To upgrade, `cd .channels`, then
+`bun update auto-channels` (following the latest) or `bun add
+github:royiro10/auto-channels#v<version>` (pinned), and restart the daemon
+([how](https://github.com/royiro10/auto-channels/blob/HEAD/docs/architecture.md#restarting-the-daemon)).
+It's also safe in a project that's already set up: existing
 JSON configs gain only the missing entries (your other MCP servers survive untouched),
 and nothing is ever overwritten.
 
